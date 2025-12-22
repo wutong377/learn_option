@@ -1,12 +1,15 @@
 import React, { useMemo, useState } from 'react';
 import { OptionParams } from '../../types';
 import { generateDataSeries, generateSurfaceData, AxisVariable } from '../../utils/dataGenerator';
+import 'katex/dist/katex.min.css';
+import Latex from 'react-latex-next';
 import { Chart } from '../charts/Chart';
 import { SurfaceChart } from '../charts/SurfaceChart';
 import { InfoTooltip } from '../ui/InfoTooltip';
 import { GreekDefinitionModal } from '../ui/GreekDefinitionModal';
 import { Box, MapPin } from 'lucide-react';
 import { GreeksResult, BlackScholes } from '../../utils/blackScholes';
+import { GREEK_DEFINITIONS } from '../../utils/definitions';
 import * as echarts from 'echarts';
 
 interface GreeksDashboardProps {
@@ -359,6 +362,14 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                                     options={getOption(config.title, config.key as keyof GreeksResult, config.color)}
                                     height={260}
                                 />
+                                <div className="mt-2 text-center border-t border-gray-700/50 pt-2">
+                                    <div className="text-gray-300 text-sm py-1">
+                                        <Latex>{`$${(params.type === 'put' && GREEK_DEFINITIONS[config.key]?.latexPut)
+                                                ? GREEK_DEFINITIONS[config.key].latexPut
+                                                : GREEK_DEFINITIONS[config.key]?.latex
+                                            }$`}</Latex>
+                                    </div>
+                                </div>
                             </div>
                         ))}
                     </div>

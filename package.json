@@ -14,9 +14,11 @@
     "date-fns": "^4.1.0",
     "echarts": "^5.5.0",
     "echarts-gl": "^2.0.9",
+    "katex": "^0.16.27",
     "lucide-react": "^0.363.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-latex-next": "^3.0.0",
     "tailwind-merge": "^2.2.2"
   },
   "devDependencies": {
