@@ -1,73 +1,66 @@
-# React + TypeScript + Vite
+# 期权学习与可视化平台 (Option Learning Platform)
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+这是一个基于 React + TypeScript + Vite 构建的期权定价与风险指标（Greeks）可视化学习工具。旨在帮助用户直观地理解 Black-Scholes 模型及其衍生指标。
 
-Currently, two official plugins are available:
+## 功能特点
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Babel](https://babeljs.io/) (or [oxc](https://oxc.rs) when used in [rolldown-vite](https://vite.dev/guide/rolldown)) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- **期权定价模型**: 完整实现了 Black-Scholes-Merton (BSM) 定价模型。
+- **Greeks 可视化**:
+  - **基础指标**: Delta, Gamma, Theta, Vega, Rho。
+  - **高阶指标**: Vanna, Charm, Speed, Color, Volga (Vomma), Zomma。
+  - 提供 2D 曲线图和 3D 曲面图，展示指标随标的价格、时间、波动率等因素的变化。
+- **数学公式展示**: 提供完整的 BSM 定价公式及各希腊字母的数学定义（支持 Call/Put 区分）。
+- **交互式仪表盘**: 用户可以动态调整参数（股价、行权价、波动率、利率、到期时间等），实时观察指标变化。
 
-## React Compiler
+## 技术栈
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- **前端框架**: React, TypeScript, Vite
+- **UI 组件**: Tailwind CSS, Lucide React
+- **图表库**: ECharts (用于 2D 和 3D 可视化)
+- **数学公式**: KaTeX / React-Latex-Next
 
-## Expanding the ESLint configuration
+## 部署说明
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+### 环境要求
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+- Node.js (推荐 v16+)
+- npm 或 yarn
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+### 本地开发
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+1. **克隆项目**
+
+   ```bash
+   git clone <repository-url>
+   cd learn_option
+   ```
+
+2. **安装依赖**
+
+   ```bash
+   npm install
+   ```
+
+3. **启动开发服务器**
+
+   ```bash
+   npm run dev
+   ```
+
+   启动后，访问 `http://localhost:5173` (或终端显示的地址) 即可使用。
+
+### 构建生产版本
+
+如需部署到生产环境，请运行以下命令构建静态资源：
+
+```bash
+npm run build
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+构建产物将生成在 `dist` 目录下。
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## 目录结构
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+- `src/utils`: 核心算法实现（Black-Scholes 公式、数据生成器）。
+- `src/components`: UI 组件（图表、仪表盘、控制面板）。
+- `src/types`: TypeScript 类型定义。
