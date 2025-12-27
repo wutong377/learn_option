@@ -27,6 +27,7 @@ export interface GreeksResult {
     color: number;
     volga: number; // aka Vomma
     zomma: number;
+    pnl?: number; // Profit & Loss
 }
 
 // Cumulative Distribution Function of Standard Normal Distribution
@@ -157,7 +158,7 @@ export class BlackScholes {
         const gamma = (e_qt * n_d1) / (S * safeSigma * sqrtT);
 
         // Vega (Vol driven) -> sqrt(t_vol)
-        const vega = S * e_qt * n_d1 * sqrtT;
+        let vega = S * e_qt * n_d1 * sqrtT;
 
         // Higher order - Basic adaptation
         const vanna = -e_qt * n_d1 * (d2 / safeSigma);
@@ -192,6 +193,11 @@ export class BlackScholes {
 
         const volga = vega * d1 * d2 / safeSigma;
         const zomma = gamma * ((d1 * d2 - 1) / safeSigma);
+
+        // Scale to Market Standards
+        theta = theta / 365; // Per Day
+        vega = vega / 100;   // Per 1% Vol
+        rho = rho / 100;     // Per 1% Rate
 
         return {
             price,

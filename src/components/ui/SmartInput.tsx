@@ -38,7 +38,7 @@ export const SmartInput: React.FC<SmartInputProps> = ({
         // Allow commas and spaces
         if (input.trim() === '') return;
 
-        const parts = input.split(',').map(s => s.trim()).filter(s => s !== '');
+        const parts = input.split(/[,，]/).map(s => s.trim()).filter(s => s !== '');
 
         // If multiple valid numbers
         const numbers: number[] = [];

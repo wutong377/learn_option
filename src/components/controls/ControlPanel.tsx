@@ -14,11 +14,25 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
     const [expiryDate, setExpiryDate] = useState<string>('');
 
     // Sync expiry date on mount or when t changes significantly (optional, but good for consistency)
+    // Sync expiry date on mount or when t changes significantly (optional, but good for consistency)
     useEffect(() => {
-        // Default init if empty
+        // Default init if empty, calculate from current params.tDiscount or params.t
         if (!expiryDate) {
-            const defaultDays = 30;
-            setExpiryDate(format(addDays(getToday(), defaultDays), 'yyyy-MM-dd'));
+            const today = getToday();
+            // Use tDiscount (Calendar Year) if available, otherwise t (Trading Year)
+            // Note: t is trading years (252 days), tDiscount is calendar years (365 days)
+            // We want calendar days.
+            let daysRemaining = 30; // Fallback
+
+            const tVal = params.tDiscount !== undefined ? params.tDiscount : params.t;
+            // Handle array case (take first value)
+            const scalarT = Array.isArray(tVal) ? tVal[0] : tVal;
+
+            if (scalarT !== undefined) {
+                daysRemaining = Math.round(scalarT * 365);
+            }
+
+            setExpiryDate(format(addDays(today, daysRemaining), 'yyyy-MM-dd'));
         }
     }, []);
 
@@ -96,8 +110,37 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
             </div>
 
             <div className="space-y-6">
+
+                <div className="space-y-4 border-b border-gray-700 pb-4 mb-4">
+                    <label className="text-sm font-medium text-gray-300 block mb-2">策略类型 (Strategy)</label>
+                    <select
+                        className="w-full bg-gray-900 border border-gray-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:border-blue-500"
+                        value={params.strategy || 'single'}
+                        onChange={(e) => handleChange('strategy', e.target.value as any)}
+                    >
+                        <option value="single">单腿期权 (Single)</option>
+                        <option value="straddle">跨式 (Straddle)</option>
+                        <option value="strangle">宽跨式 (Strangle)</option>
+                        <option value="butterfly">蝶式 (Butterfly)</option>
+                        <option value="iron_condor">鹰式 (Iron Condor)</option>
+                    </select>
+
+                    {params.strategy !== 'single' && (
+                        <SmartInput
+                            label="价差宽度 (Width)"
+                            value={params.width || 10}
+                            min={1}
+                            max={50}
+                            step={1}
+                            onChange={(v) => handleChange('width', v)}
+                        />
+                    )}
+                </div>
+
                 <div>
-                    <label className="text-sm font-medium text-gray-300 mb-2 block">期权类型</label>
+                    <label className="text-sm font-medium text-gray-300 mb-2 block">
+                        {params.strategy === 'single' ? '期权类型' : '方向 (Direction)'}
+                    </label>
                     <div className="flex bg-gray-700 rounded-lg p-1">
                         <button
                             onClick={() => handleChange('type', 'call')}
@@ -106,7 +149,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                                 : 'text-gray-400 hover:text-white'
                                 }`}
                         >
-                            看涨 (Call)
+                            {params.strategy === 'single' ? '看涨 (Call)' : '做多 (Long)'}
                         </button>
                         <button
                             onClick={() => handleChange('type', 'put')}
@@ -115,7 +158,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                                 : 'text-gray-400 hover:text-white'
                                 }`}
                         >
-                            看跌 (Put)
+                            {params.strategy === 'single' ? '看跌 (Put)' : '做空 (Short)'}
                         </button>
                     </div>
                 </div>

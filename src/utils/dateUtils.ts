@@ -10,7 +10,7 @@ const HOLIDAYS = [
     // Chinese New Year would go here
 ];
 
-export const getToday = () => parseISO("2025-12-21"); // Fixed "Today" per system time requirements
+export const getToday = () => new Date(); // Use current system time
 
 export const calculateDays = (expiryDateStr: string) => {
     const today = getToday();

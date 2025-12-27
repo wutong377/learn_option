@@ -38,99 +38,99 @@ const GRAPH_CONFIGS = {
 const ALL_GREEKS = [...GRAPH_CONFIGS.basic, ...GRAPH_CONFIGS.advanced];
 
 export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
-    const [activeTab, setActiveTab] = useState<'basic' | 'advanced' | 'surface'>('basic');
+    const [activeTab, setActiveTab] = useState<'basic' | 'advanced' | 'surface' | 'pnl_expiry' | 'pnl_surface'>('basic');
     const [xAxisVar, setXAxisVar] = useState<AxisVariable>('S');
     const [zAxisVar, setZAxisVar] = useState<keyof GreeksResult>('delta');
     const [selectedGreek, setSelectedGreek] = useState<string | null>(null);
     const [markerInput, setMarkerInput] = useState<string>('');
 
-    // 2D Data
+    // 2D Data (Standard Greeks)
     const { xAxis, series } = useMemo(() => {
+        // If viewing P&L Expiry, we handle it separately
+        if (activeTab === 'pnl_expiry') return { xAxis: [], series: {} as any };
         return generateDataSeries(params, xAxisVar, 1000);
-    }, [params, xAxisVar]);
+    }, [params, xAxisVar, activeTab]);
 
-    // 3D Data
+    // Expiry P&L Data
+    const expiryPnlData = useMemo(() => {
+        if (activeTab !== 'pnl_expiry') return null;
+        // Always usage 'S' as axis for P&L typical view
+        return generateDataSeries(params, 'S', 500, true);
+    }, [params, activeTab]);
+
+    // 3D Data (Standard or P&L)
     const surfaceData = useMemo(() => {
+        if (activeTab === 'pnl_surface') {
+            return generateSurfaceData(params, 'pnl');
+        }
         if (activeTab !== 'surface') return null;
-        return generateSurfaceData(params, zAxisVar, 40);
-    }, [params, zAxisVar, activeTab]);
+        return generateSurfaceData(params, zAxisVar);
+    }, [params, activeTab, zAxisVar]);
 
-    // Calculate Marker Greeks
+    // Calculate Marker Greeks (Only for standard views)
     const markerResults = useMemo(() => {
-        if (!markerInput || isNaN(parseFloat(markerInput))) return null;
+        const results: Array<{ name: string, greeks: GreeksResult }> = [];
+        if (!markerInput || isNaN(parseFloat(markerInput))) return results;
 
-        const val = parseFloat(markerInput);
-        let internalVal = val;
-
-        // Convert input units to internal units
-        if (xAxisVar === 't') internalVal = val / 252;
-        if (xAxisVar === 'sigma') internalVal = val / 100;
-
-        // Identify multi-series variable
-        let compareVar: keyof OptionParams | null = null;
-        const arrayCandidates: (keyof OptionParams)[] = ['S', 'K', 't', 'sigma', 'r'];
-        for (const key of arrayCandidates) {
-            if (key !== (xAxisVar as string) && Array.isArray(params[key]) && (params[key] as number[]).length > 1) {
-                compareVar = key;
-                break;
-            }
-        }
-
-        const results: { name: string, greeks: GreeksResult }[] = [];
-        const baseParams: any = { ...params, [xAxisVar]: internalVal };
-
-        // Handle dual-time for marker if X-axis is 't'
+        // Convert Display Unit to Raw Unit for Interpolation
+        let markerVal = parseFloat(markerInput);
         if (xAxisVar === 't') {
-            // Get scalar base t and tDiscount from params to calculate ratio
-            const getScalar = (v: number | number[] | undefined) => Array.isArray(v) ? v[0] : v;
-            const baseT = getScalar(params.t) as number;
-            const baseTDiscount = getScalar(params.tDiscount) as number | undefined;
-
-            if (baseTDiscount !== undefined && baseT > 0) {
-                const ratio = baseTDiscount / baseT;
-                baseParams.tDiscount = internalVal * ratio;
-            }
+            markerVal = markerVal / 252;
+        } else if (xAxisVar === 'sigma' || xAxisVar === 'r') {
+            markerVal = markerVal / 100;
         }
 
-        if (compareVar) {
-            const values = params[compareVar] as number[];
-            values.forEach(v => {
-                const p: any = { ...baseParams, [compareVar!]: v };
-                // Flatten other array params (scalar logic handled in BlackScholes wrapper usually, but let's be safe)
-                // Actually BlackScholes.calculate expects scalar SimulationParams.
-                // We need to ensure p has only scalars. 
-                // Any other array param should perform a "take first" fallback or loop?
-                // dataGenerator assumes only ONE compare var. Others are [0].
-                arrayCandidates.forEach(k => {
-                    if (k !== xAxisVar && k !== compareVar && Array.isArray(p[k])) {
-                        p[k] = (p[k] as number[])[0];
-                    }
-                });
+        if (!xAxis || xAxis.length === 0) return results;
 
-                const label = `${compareVar}=${v}`;
-                // Format label for display (days, %)
-                let displayLabel = label;
-                if (compareVar === 't') displayLabel = `t=${(v * 252).toFixed(0)}d (Trading)`;
-                if (compareVar === 'sigma') displayLabel = `σ=${(v * 100).toFixed(0)}%`;
-                if (compareVar === 'r') displayLabel = `r=${(v * 100).toFixed(1)}%`;
+        // Helper to interpolate Y for a given X
+        const interpolate = (targetX: number, xArr: number[], yArr: number[]): number => {
+            if (xArr.length !== yArr.length) return NaN;
 
-                results.push({ name: displayLabel, greeks: BlackScholes.calculate(p, params.type) });
-            });
-        } else {
-            // Ensure scalars
-            const p: any = { ...baseParams };
-            arrayCandidates.forEach(k => {
-                if (k !== xAxisVar && Array.isArray(p[k])) {
-                    p[k] = (p[k] as number[])[0];
+            if (targetX <= xArr[0]) return yArr[0];
+            if (targetX >= xArr[xArr.length - 1]) return yArr[yArr.length - 1];
+
+            let i = 0;
+            while (i < xArr.length - 1 && xArr[i + 1] < targetX) {
+                i++;
+            }
+
+            const x0 = xArr[i];
+            const x1 = xArr[i + 1];
+            const y0 = yArr[i];
+            const y1 = yArr[i + 1];
+
+            if (x1 === x0) return y0;
+
+            const t = (targetX - x0) / (x1 - x0);
+            return y0 + t * (y1 - y0);
+        };
+
+        // Only process if series has content (might be empty if in pnl mode)
+        const greekKeys = Object.keys(series || {}) as Array<keyof GreeksResult>;
+        if (greekKeys.length === 0) return results;
+
+        // Ensure we inspect the first greek to get series names
+        const firstGreek = greekKeys[0];
+        const sDataList = series[firstGreek];
+
+        if (!sDataList) return results;
+
+        sDataList.forEach((sMeta: any, sIdx: number) => {
+            const resultGreeks: Partial<GreeksResult> = {};
+
+            greekKeys.forEach(gKey => {
+                const sArr = series[gKey][sIdx];
+                if (sArr && sArr.data) {
+                    resultGreeks[gKey] = interpolate(markerVal, xAxis, sArr.data);
                 }
             });
-            results.push({ name: 'Current', greeks: BlackScholes.calculate(p, params.type) });
-        }
+
+            results.push({ name: sMeta.name, greeks: resultGreeks as GreeksResult });
+        });
 
         return results;
 
-    }, [markerInput, params, xAxisVar]);
-
+    }, [markerInput, xAxis, series, xAxisVar]);
 
     // Helper to create chart option for 2D
     const getOption = (title: string, dataKey: keyof GreeksResult, color: string): echarts.EChartsOption => {
@@ -164,14 +164,14 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                 textStyle: { color: '#f3f4f6' },
                 formatter: (params: any) => {
                     if (!Array.isArray(params)) return '';
-                    let result = `${params[0].axisValueLabel}<br/>`;
+                    let xVal = params[0].value[0];
+                    if (typeof xVal === 'number') xVal = xVal.toFixed(2);
+
+                    let result = `${xVal}<br/>`;
                     params.forEach((p: any) => {
                         let sName = p.seriesName;
-                        if (sName.startsWith('t=')) {
-                            const val = parseFloat(sName.split('=')[1]);
-                            if (!isNaN(val)) sName = `t=${(val * 252).toFixed(0)}d (Trading)`;
-                        }
-                        result += `${p.marker} ${sName}: ${p.value.toFixed(4)}<br/>`;
+                        let val = p.value[1]; // Value axis data is [x, y]
+                        result += `${p.marker} ${sName}: ${val.toFixed(4)}<br/>`;
                     });
                     return result;
                 }
@@ -185,14 +185,13 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
             },
             grid: { top: isMultiSeries ? 50 : 40, right: 20, bottom: 30, left: 50, containLabel: false },
             xAxis: {
-                type: 'category',
-                data: xAxis.map(v => {
-                    if (xAxisVar === 't') return (v * 252).toFixed(0);
-                    if (xAxisVar === 'sigma') return (v * 100).toFixed(0);
-                    return v.toFixed(2);
-                }),
+                type: 'value',
+                min: 'dataMin',
+                max: 'dataMax',
+                inverse: xAxisVar === 't',
                 axisLine: { lineStyle: { color: '#4b5563' } },
-                axisLabel: { color: '#9ca3af', showMaxLabel: true, showMinLabel: true }
+                axisLabel: { color: '#9ca3af', showMaxLabel: true, showMinLabel: true },
+                splitLine: { show: false }
             },
             yAxis: {
                 type: 'value',
@@ -200,20 +199,33 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                 axisLabel: { color: '#9ca3af' },
                 scale: true
             },
-            series: currentSeriesList.map((s, index) => ({
-                name: s.name,
-                data: s.data,
-                type: 'line',
-                smooth: true,
-                showSymbol: false,
-                color: isMultiSeries ? undefined : color,
-                lineStyle: { width: isMultiSeries ? 2 : 3 },
-                markLine: index === 0 ? {
-                    symbol: 'none',
-                    data: markLineData,
-                    animation: false
-                } : undefined
-            }))
+            series: currentSeriesList.map((s: any, index: number) => {
+                // Scale X-axis for display and markers
+                const scaledX = xAxis.map(v => {
+                    if (xAxisVar === 't') return v * 252;
+                    if (xAxisVar === 'sigma') return v * 100;
+                    if (xAxisVar === 'r') return v * 100;
+                    return v;
+                });
+
+                return {
+                    name: s.name,
+                    data: scaledX.map((x, i) => [x, s.data[i]]),
+                    type: 'line',
+                    smooth: true,
+                    showSymbol: false,
+                    color: isMultiSeries ? undefined : color,
+                    lineStyle: { width: isMultiSeries ? 2 : 3 },
+                    // Apply markLine to all series to ensure visibility and prevent layering issues
+                    markLine: {
+                        symbol: 'none',
+                        data: markLineData,
+                        animation: false,
+                        lineStyle: { type: 'solid', color: '#fff', width: 2 },
+                        label: { show: true, formatter: '{c}' }
+                    }
+                };
+            })
         };
     };
 
@@ -254,18 +266,33 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                         <Box className="w-4 h-4" />
                         3D 曲面图
                     </button>
+                    <button
+                        onClick={() => setActiveTab('pnl_expiry')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'pnl_expiry' ? 'bg-green-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        到期盈亏 (2D)
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('pnl_surface')}
+                        className={`px-4 py-2 text-sm font-medium rounded-md transition-colors ${activeTab === 'pnl_surface' ? 'bg-emerald-600 text-white shadow' : 'text-gray-400 hover:text-white'}`}
+                    >
+                        盈亏曲面 (3D)
+                    </button>
                 </div>
 
                 {/* Controls based on view */}
-                {activeTab !== 'surface' ? (
+                {(activeTab !== 'surface' && activeTab !== 'pnl_surface') ? (
                     <div className="flex flex-wrap items-center gap-4">
-                        <div className="flex items-center gap-2">
-                            <div className="flex bg-gray-800 rounded-lg p-1">
-                                <button onClick={() => setXAxisVar('S')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'S' ? 'bg-teal-600 text-white' : 'text-gray-400'}`}>S</button>
-                                <button onClick={() => setXAxisVar('t')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 't' ? 'bg-orange-600 text-white' : 'text-gray-400'}`}>t (Trading)</button>
-                                <button onClick={() => setXAxisVar('sigma')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'sigma' ? 'bg-pink-600 text-white' : 'text-gray-400'}`}>σ</button>
+                        {activeTab !== 'pnl_expiry' && (
+                            <div className="flex items-center gap-2">
+                                <div className="flex bg-gray-800 rounded-lg p-1">
+                                    <button onClick={() => setXAxisVar('S')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'S' ? 'bg-teal-600 text-white' : 'text-gray-400'}`}>S</button>
+                                    <button onClick={() => setXAxisVar('t')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 't' ? 'bg-orange-600 text-white' : 'text-gray-400'}`}>t (Trading)</button>
+                                    <button onClick={() => setXAxisVar('sigma')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'sigma' ? 'bg-pink-600 text-white' : 'text-gray-400'}`}>σ</button>
+                                    <button onClick={() => setXAxisVar('r')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'r' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>r</button>
+                                </div>
                             </div>
-                        </div>
+                        )}
 
                         {/* Marker Input */}
                         <div className="flex items-center gap-2 bg-gray-800 px-3 py-1.5 rounded-lg border border-gray-700">
@@ -281,24 +308,26 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                         </div>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-3">
-                        <span className="text-sm font-medium text-gray-400">纵轴指标:</span>
-                        <select
-                            className="bg-gray-800 text-white text-sm rounded-lg p-2 border border-gray-700 outline-none focus:border-teal-500"
-                            value={zAxisVar}
-                            onChange={(e) => setZAxisVar(e.target.value as keyof GreeksResult)}
-                        >
-                            {ALL_GREEKS.map(g => (
-                                <option key={g.key} value={g.key}>{g.title}</option>
-                            ))}
-                        </select>
-                    </div>
+                    activeTab === 'surface' && (
+                        <div className="flex items-center gap-3">
+                            <span className="text-sm font-medium text-gray-400">纵轴指标:</span>
+                            <select
+                                className="bg-gray-800 text-white text-sm rounded-lg p-2 border border-gray-700 outline-none focus:border-teal-500"
+                                value={zAxisVar}
+                                onChange={(e) => setZAxisVar(e.target.value as keyof GreeksResult)}
+                            >
+                                {ALL_GREEKS.map(g => (
+                                    <option key={g.key} value={g.key}>{g.title}</option>
+                                ))}
+                            </select>
+                        </div>
+                    )
                 )}
             </div>
 
             {/* Content Area */}
             <div className="flex-1 overflow-y-auto min-h-0 pr-2 pb-2">
-                {activeTab === 'surface' && surfaceData ? (
+                {(activeTab === 'surface' || activeTab === 'pnl_surface') && surfaceData ? (
                     <div className="h-full bg-gray-800/80 rounded-xl border border-gray-700/50 p-4 shadow-lg relative flex flex-col">
                         <SurfaceChart
                             data={surfaceData.data}
@@ -307,6 +336,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                             maxS={surfaceData.maxS}
                             minT={surfaceData.minT}
                             maxT={surfaceData.maxT}
+                            breakEvenLine={surfaceData.breakEvenLine}
                             height="100%"
                         />
                         {/* ... existing surface controls ... */}
@@ -315,6 +345,130 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                                 <InfoTooltip greekKey={zAxisVar} />
                             </div>
                         </div>
+                    </div>
+                ) : activeTab === 'pnl_expiry' && expiryPnlData ? (
+                    <div className="h-full bg-gray-800/80 rounded-xl border border-gray-700/50 p-4 shadow-lg">
+                        {(() => {
+                            const pnlS = expiryPnlData.series && expiryPnlData.series.pnl ? expiryPnlData.series.pnl[0] : undefined;
+                            if (!pnlS) return <div className="text-gray-400 text-center mt-10">No Data</div>;
+                            const sData = pnlS.data;
+                            const xData = expiryPnlData.xAxis;
+
+                            // Analysis: Find Break-even and Inflection Points
+                            const breakEvens: number[] = [];
+
+                            // 1. Find Break-Evens (Zero Crossings)
+                            for (let i = 1; i < sData.length; i++) {
+                                const val = sData[i];
+                                const prev = sData[i - 1];
+                                if (Math.sign(prev) !== Math.sign(val) && prev !== val) {
+                                    // Linear interp for S
+                                    const sPrev = xData[i - 1];
+                                    const sCurr = xData[i];
+                                    const zeroS = sPrev + (0 - prev) * (sCurr - sPrev) / (val - prev);
+                                    breakEvens.push(zeroS);
+                                }
+                            }
+
+                            // 2. Identify Inflection Points (Strategy Strikes)
+                            const strategy = params.strategy || 'single';
+                            const width = params.width || 10;
+                            const K = Array.isArray(params.K) ? params.K[0] : params.K;
+                            const inflections: number[] = [];
+
+                            if (strategy === 'single' || strategy === 'straddle') {
+                                inflections.push(K);
+                            } else if (strategy === 'strangle') {
+                                inflections.push(K - width);
+                                inflections.push(K + width);
+                            } else if (strategy === 'butterfly') {
+                                inflections.push(K - width);
+                                inflections.push(K);
+                                inflections.push(K + width);
+                            } else if (strategy === 'iron_condor') {
+                                inflections.push(K - 2 * width);
+                                inflections.push(K - width);
+                                inflections.push(K + width);
+                                inflections.push(K + 2 * width);
+                            }
+
+                            const chartOption: any = {
+                                backgroundColor: 'transparent',
+                                title: { text: '到期盈亏图 (Expiry P&L)', left: 'center', textStyle: { color: '#e5e7eb' } },
+                                tooltip: {
+                                    trigger: 'axis',
+                                    backgroundColor: 'rgba(17, 24, 39, 0.9)',
+                                    textStyle: { color: '#f3f4f6' },
+                                    formatter: (params: any) => {
+                                        if (!params[0]) return '';
+                                        const p = params[0];
+                                        return `Price: ${p.value[0].toFixed(2)}<br/>P&L: ${p.value[1].toFixed(2)}`;
+                                    }
+                                },
+                                grid: { top: 60, right: 30, bottom: 30, left: 60 },
+                                xAxis: {
+                                    type: 'value',
+                                    min: 'dataMin',
+                                    max: 'dataMax',
+                                    axisLine: { lineStyle: { color: '#4b5563' } },
+                                    axisLabel: { color: '#9ca3af', formatter: (v: number) => v.toFixed(2) },
+                                    splitLine: { show: false }
+                                },
+                                yAxis: {
+                                    type: 'value',
+                                    splitLine: { lineStyle: { color: '#374151', type: 'dashed' } },
+                                    axisLabel: { color: '#9ca3af' }
+                                },
+                                series: [{
+                                    name: 'P&L',
+                                    type: 'line',
+                                    smooth: true,
+                                    // Zip x and y for value axis
+                                    data: xData.map((x, i) => [x, sData[i]]),
+                                    lineStyle: { width: 3, color: '#60a5fa' },
+                                    areaStyle: {
+                                        color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
+                                            { offset: 0, color: 'rgba(96, 165, 250, 0.5)' },
+                                            { offset: 1, color: 'rgba(96, 165, 250, 0.0)' }
+                                        ])
+                                    },
+                                    markLine: {
+                                        symbol: 'none',
+                                        animation: false,
+                                        data: [
+                                            // Zero line
+                                            { yAxis: 0, lineStyle: { color: '#6b7280', width: 1, type: 'dashed' }, label: { show: false } },
+                                            // Inflection Points (Strikes)
+                                            ...inflections.map(inf => ({
+                                                xAxis: inf,
+                                                lineStyle: { color: '#10b981', width: 2, type: 'solid' },
+                                                label: {
+                                                    show: true,
+                                                    position: 'end',
+                                                    formatter: (p: any) => `K: ${p.value.toFixed(1)}`,
+                                                    color: '#10b981',
+                                                    fontWeight: 'bold'
+                                                }
+                                            })),
+                                            // Break-Even Lines (Vertical)
+                                            ...breakEvens.map(be => ({
+                                                xAxis: be,
+                                                lineStyle: { color: '#f59e0b', width: 2, type: 'dashed' },
+                                                label: {
+                                                    show: true,
+                                                    position: 'insideStartBottom',
+                                                    formatter: (p: any) => `BE:\n${p.value.toFixed(1)}`,
+                                                    color: '#f59e0b',
+                                                    fontWeight: 'bold',
+                                                    lineHeight: 16
+                                                }
+                                            }))
+                                        ]
+                                    }
+                                }]
+                            };
+                            return <Chart options={chartOption} height="100%" />;
+                        })()}
                     </div>
                 ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
@@ -335,12 +489,12 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                                 </div>
 
                                 {/* Marker Result Overlay */}
-                                {markerResults && (
+                                {markerResults && markerResults.length > 0 && (
                                     <div className="absolute top-4 left-4 z-10 pointer-events-none">
                                         <div className="bg-gray-900/90 border-l-2 border-yellow-500 p-2 rounded shadow-xl backdrop-blur-sm">
                                             {markerResults.length === 1 ? (
                                                 <div className="text-xl font-bold text-white tracking-wide">
-                                                    {markerResults[0].greeks[config.key as keyof GreeksResult].toFixed(4)}
+                                                    {markerResults[0].greeks[config.key as keyof GreeksResult]?.toFixed(4)}
                                                 </div>
                                             ) : (
                                                 <div className="flex flex-col gap-1">
@@ -348,7 +502,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                                                         <div key={idx} className="flex items-center gap-2 text-xs">
                                                             <span className="text-gray-400">{res.name}:</span>
                                                             <span className="font-mono font-bold text-white">
-                                                                {res.greeks[config.key as keyof GreeksResult].toFixed(4)}
+                                                                {res.greeks[config.key as keyof GreeksResult]?.toFixed(4)}
                                                             </span>
                                                         </div>
                                                     ))}
@@ -365,8 +519,8 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                                 <div className="mt-2 text-center border-t border-gray-700/50 pt-2">
                                     <div className="text-gray-300 text-sm py-1">
                                         <Latex>{`$${(params.type === 'put' && GREEK_DEFINITIONS[config.key]?.latexPut)
-                                                ? GREEK_DEFINITIONS[config.key].latexPut
-                                                : GREEK_DEFINITIONS[config.key]?.latex
+                                            ? GREEK_DEFINITIONS[config.key].latexPut
+                                            : GREEK_DEFINITIONS[config.key]?.latex
                                             }$`}</Latex>
                                     </div>
                                 </div>
@@ -380,6 +534,97 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                 greekKey={selectedGreek}
                 onClose={() => setSelectedGreek(null)}
             />
+
+            {/* Strategy Legs Display */}
+            <div className="mt-4 bg-gray-900/50 p-4 rounded-xl border border-gray-800 backdrop-blur-md">
+                <h3 className="text-sm font-bold text-gray-400 mb-3 border-b border-gray-700 pb-2">策略构成 (Strategy Legs)</h3>
+                <div className="flex flex-wrap gap-4">
+                    {(() => {
+                        const strategy = params.strategy || 'single';
+                        const width = params.width || 10;
+                        const mainType = params.type;
+                        const K = Array.isArray(params.K) ? params.K[0] : params.K;
+
+                        // Helper for badge style
+                        const Badge = ({ type, strike, action }: { type: 'Call' | 'Put', strike: number, action: 'Long' | 'Short' }) => (
+                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${action === 'Long' ? 'bg-green-900/30 border-green-700/50' : 'bg-red-900/30 border-red-700/50'
+                                }`}>
+                                <span className={`text-xs font-bold ${action === 'Long' ? 'text-green-400' : 'text-red-400'}`}>
+                                    {action === 'Long' ? '买入' : '卖出'} ( {action} )
+                                </span>
+                                <span className="text-xs text-gray-300 font-mono">
+                                    {type} @ <span className="text-white font-bold">{strike.toFixed(2)}</span>
+                                </span>
+                            </div>
+                        );
+
+                        // Direction multiplier: Call=Long (+1), Put=Short (-1) global direction
+                        const dir = mainType === 'call' ? 1 : -1;
+                        const isLong = mainType === 'call';
+
+                        if (strategy === 'single') {
+                            return <Badge type={isLong ? 'Call' : 'Put'} strike={K} action={isLong ? 'Long' : 'Long'} />;
+                            // Wait, single leg depends on type. 'call' = Call, 'put' = Put. Usually 'Long' by default unless implied otherwise?
+                            // Standard calculator usually models 'Long Call' or 'Long Put'. 
+                            // If user wants Short, they interpret -Price?
+                            // Let's assume Standard is Long.
+                        }
+
+                        // Strategy Logic mirrors dataGenerator
+                        // If dir=1 (Call selected), we show standard LONG strategy.
+                        // If dir=-1 (Put selected), we show SHORT strategy (invert Long/Short badges).
+
+                        const longAction = isLong ? 'Long' : 'Short';
+                        const shortAction = isLong ? 'Short' : 'Long';
+
+                        if (strategy === 'straddle') {
+                            // Call K + Put K
+                            return (
+                                <>
+                                    <Badge type="Call" strike={K} action={longAction} />
+                                    <Badge type="Put" strike={K} action={longAction} />
+                                </>
+                            );
+                        }
+
+                        if (strategy === 'strangle') {
+                            // Put (K-W) + Call (K+W)
+                            return (
+                                <>
+                                    <Badge type="Put" strike={K - width} action={longAction} />
+                                    <Badge type="Call" strike={K + width} action={longAction} />
+                                </>
+                            );
+                        }
+
+                        if (strategy === 'butterfly') {
+                            // Call (K-W) + 2x Short Call K + Call (K+W)
+                            return (
+                                <>
+                                    <Badge type="Call" strike={K - width} action={longAction} />
+                                    <Badge type="Call" strike={K} action={shortAction} />
+                                    <div className="flex items-center text-xs text-gray-500 font-mono">x2</div>
+                                    <Badge type="Call" strike={K + width} action={longAction} />
+                                </>
+                            );
+                        }
+
+                        if (strategy === 'iron_condor') {
+                            // Put (K-2W) + Short Put (K-W) + Short Call (K+W) + Call (K+2W)
+                            return (
+                                <>
+                                    <Badge type="Put" strike={K - 2 * width} action={longAction} />
+                                    <Badge type="Put" strike={K - width} action={shortAction} />
+                                    <Badge type="Call" strike={K + width} action={shortAction} />
+                                    <Badge type="Call" strike={K + 2 * width} action={longAction} />
+                                </>
+                            );
+                        }
+
+                        return null;
+                    })()}
+                </div>
+            </div>
         </div>
     );
 };

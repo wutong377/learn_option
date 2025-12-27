@@ -1,4 +1,5 @@
 export type OptionType = 'call' | 'put';
+export type StrategyType = 'single' | 'straddle' | 'strangle' | 'butterfly' | 'iron_condor';
 
 export interface OptionParams {
     S: number | number[];
@@ -8,6 +9,9 @@ export interface OptionParams {
     sigma: number | number[];
     r: number | number[];
     type: OptionType;
+    // Strategy Params
+    strategy?: StrategyType;
+    width?: number; // Spread width
 }
 
 export const DEFAULT_PARAMS: OptionParams = {
@@ -17,4 +21,6 @@ export const DEFAULT_PARAMS: OptionParams = {
     sigma: 0.2,
     r: 0.05,
     type: 'call',
+    strategy: 'single',
+    width: 10,
 };

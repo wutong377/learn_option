@@ -9,6 +9,7 @@ interface SurfaceChartProps {
     maxS: number;
     minT: number;
     maxT: number;
+    breakEvenLine?: [number, number, number][];
     height?: string | number;
 }
 
@@ -19,6 +20,7 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
     maxS,
     minT,
     maxT,
+    breakEvenLine,
     height = '600px',
 }) => {
     const chartRef = useRef<HTMLDivElement>(null);
@@ -30,9 +32,52 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
                 chartInstance.current = echarts.init(chartRef.current, 'dark');
             }
 
+            const seriesList: any[] = [{
+                type: 'surface',
+                wireframe: {
+                    show: true,
+                    lineStyle: { color: 'rgba(255,255,255,0.1)' }
+                },
+                shading: 'color',
+                data: data.map(d => [d[0], d[1] * 252, d[2]]),
+                itemStyle: {
+                    opacity: 0.9
+                }
+            }];
+
+            if (breakEvenLine && breakEvenLine.length > 0) {
+                seriesList.push({
+                    type: 'scatter3D',
+                    name: 'Break-Even',
+                    data: breakEvenLine.map(d => [d[0], d[1] * 252, d[2] + 0.1]), // Lift slightly to be visible? Or z=0 is fine.
+                    symbolSize: 3,
+                    itemStyle: {
+                        color: '#fff',
+                        opacity: 1
+                    },
+                    tooltip: {
+                        formatter: (params: any) => {
+                            return `Break-Even<br/>S: ${params.value[0].toFixed(2)}<br/>T: ${params.value[1].toFixed(1)}d`;
+                        }
+                    }
+                });
+            }
+
             const option: any = {
                 backgroundColor: 'transparent',
-                tooltip: {},
+                tooltip: {
+                    formatter: (params: any) => {
+                        if (params.seriesType === 'scatter3D') return params.data.tooltip || '';
+                        const [x, y, z] = params.value;
+                        return `
+                            <div style="font-size: 12px; line-height: 1.5;">
+                                <div><strong>标的价格 (S):</strong> ${x.toFixed(2)}</div>
+                                <div><strong>时间 (Time):</strong> ${y.toFixed(1)} Days</div>
+                                <div><strong>${zLabel}:</strong> ${z.toFixed(4)}</div>
+                            </div>
+                        `;
+                    }
+                },
                 title: {
                     text: `${zLabel} 曲面图 (Spot vs Time)`,
                     left: 'center',
@@ -53,28 +98,40 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
                     name: '价格 (S)',
                     min: minS,
                     max: maxS,
-                    axisLabel: { textStyle: { color: '#ccc' } }
+                    nameTextStyle: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
+                    axisLabel: { textStyle: { color: '#ffffff', fontSize: 12 }, margin: 8 },
+                    axisLine: { lineStyle: { color: '#6b7280' } },
+                    axisPointer: { show: true, lineStyle: { color: 'rgba(255,255,255,0.5)', width: 1 } }
                 },
                 yAxis3D: {
                     type: 'value',
                     name: '时间 (Days)',
                     min: minT * 252,
                     max: maxT * 252,
+                    nameTextStyle: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
                     axisLabel: {
-                        textStyle: { color: '#ccc' },
+                        textStyle: { color: '#ffffff', fontSize: 12 },
+                        margin: 8,
                         formatter: (val: number) => val.toFixed(0)
-                    }
+                    },
+                    axisLine: { lineStyle: { color: '#6b7280' } },
+                    axisPointer: { show: true, lineStyle: { color: 'rgba(255,255,255,0.5)', width: 1 } }
                 },
                 zAxis3D: {
                     type: 'value',
                     name: zLabel,
-                    axisLabel: { textStyle: { color: '#ccc' } }
+                    nameTextStyle: { color: '#ffffff', fontSize: 14, fontWeight: 'bold' },
+                    axisLabel: { textStyle: { color: '#ffffff', fontSize: 12 }, margin: 8 },
+                    axisLine: { lineStyle: { color: '#6b7280' } },
+                    axisPointer: { show: true, lineStyle: { color: 'rgba(255,255,255,0.5)', width: 1 } }
                 },
                 grid3D: {
                     viewControl: {
                         projection: 'perspective',
-                        autoRotate: true,
-                        autoRotateSpeed: 5
+                        autoRotate: false,
+                        rotateSensitivity: 1,
+                        zoomSensitivity: 1,
+                        panSensitivity: 1
                     },
                     boxWidth: 200,
                     boxDepth: 80,
@@ -86,22 +143,14 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
                         ambient: {
                             intensity: 0.3
                         }
-                    }
-                },
-                series: [{
-                    type: 'surface',
-                    wireframe: {
-                        show: false
                     },
-                    shading: 'color',
-                    // Data is [S, t, z]. Map t to t*252 for days
-                    data: data.map(d => [d[0], d[1] * 252, d[2]]),
-                    itemStyle: {
-                        opacity: 0.8
-                    }
-                }]
+                    environment: 'auto'
+                },
+                series: seriesList
             };
 
+            chartInstance.current.setOption(option, true); // true to merge/replace carefully? No, usually true avoids merging issues.
+            // Actually 'notMerge' is the second arg. setOption(option, {notMerge: true})
             chartInstance.current.setOption(option);
         }
 
@@ -113,7 +162,7 @@ export const SurfaceChart: React.FC<SurfaceChartProps> = ({
             chartInstance.current?.dispose();
             chartInstance.current = null;
         };
-    }, [data, zLabel, minS, maxS, minT, maxT]);
+    }, [data, zLabel, minS, maxS, minT, maxT, breakEvenLine]);
 
     return <div ref={chartRef} style={{ height, width: '100%' }} />;
 };
