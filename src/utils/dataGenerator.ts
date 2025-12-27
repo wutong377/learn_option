@@ -1,5 +1,6 @@
 import { BlackScholes, SimulationParams, GreeksResult } from './blackScholes';
 import { OptionParams } from '../types';
+import { getStrategyLegs } from './strategyDefinitions';
 
 export type AxisVariable = 'S' | 't' | 'sigma' | 'r';
 
@@ -36,41 +37,28 @@ const addGreeks = (a: GreeksResult, b: GreeksResult, weight: number = 1) => {
 // Extracted Strategy Calculator
 function createStrategyCalculator(params: OptionParams): StrategyCalc {
     return (p: SimulationParams): GreeksResult => {
-        const strategy = params.strategy || 'single';
-        const width = params.width || 10;
-        const mainType = params.type; // 'call' (Long context) or 'put' (Short context)
-        const dir = mainType === 'call' ? 1 : -1;
+        const currentParams: OptionParams = {
+            ...params,
+            ...p, // Override S, K, t, sigma, r with dynamic values
+        };
 
-        if (strategy === 'single') {
-            return calcLeg(p, mainType);
-        }
+        const legs = getStrategyLegs(currentParams);
 
         let result = emptyGreeks();
-        const K = p.K;
 
-        if (strategy === 'straddle') {
-            // Long Straddle: Call K + Put K
-            result = addGreeks(result, calcLeg({ ...p, K }, 'call'), 1 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K }, 'put'), 1 * dir);
+        legs.forEach(leg => {
+            const legParams: SimulationParams = {
+                S: p.S,
+                K: leg.k,
+                t: leg.t,
+                tDiscount: leg.tDiscount,
+                sigma: leg.sigma,
+                r: leg.r
+            };
 
-        } else if (strategy === 'strangle') {
-            // Long Strangle: Put (K-W) + Call (K+W)
-            result = addGreeks(result, calcLeg({ ...p, K: K - width }, 'put'), 1 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K: K + width }, 'call'), 1 * dir);
-
-        } else if (strategy === 'butterfly') {
-            // Long Butterfly: Long Call (K-W), Short 2 Calls K, Long Call (K+W)
-            result = addGreeks(result, calcLeg({ ...p, K: K - width }, 'call'), 1 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K }, 'call'), -2 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K: K + width }, 'call'), 1 * dir);
-
-        } else if (strategy === 'iron_condor') {
-            // Long Iron Condor: Long Put (K-2W), Short Put (K-W), Short Call (K+W), Long Call (K+2W)
-            result = addGreeks(result, calcLeg({ ...p, K: K - 2 * width }, 'put'), 1 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K: K - width }, 'put'), -1 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K: K + width }, 'call'), -1 * dir);
-            result = addGreeks(result, calcLeg({ ...p, K: K + 2 * width }, 'call'), 1 * dir);
-        }
+            const legGreeks = calcLeg(legParams, leg.type);
+            result = addGreeks(result, legGreeks, leg.quantity);
+        });
 
         return result;
     };
@@ -314,7 +302,8 @@ export function generateSurfaceData(
                 previousPnl = currentPnl;
                 previousS = sVal;
             } else {
-                data.push([sVal, tVal, res[zKey]!]);
+                const val = res[zKey];
+                data.push([sVal, tVal, val !== undefined ? val : 0]);
             }
         }
     }

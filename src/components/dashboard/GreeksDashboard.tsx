@@ -4,6 +4,7 @@ import { generateDataSeries, generateSurfaceData, AxisVariable } from '../../uti
 import 'katex/dist/katex.min.css';
 import Latex from 'react-latex-next';
 import { Chart } from '../charts/Chart';
+import { StrategyLegs } from './StrategyLegs';
 import { SurfaceChart } from '../charts/SurfaceChart';
 import { InfoTooltip } from '../ui/InfoTooltip';
 import { GreekDefinitionModal } from '../ui/GreekDefinitionModal';
@@ -536,94 +537,8 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
             />
 
             {/* Strategy Legs Display */}
-            <div className="mt-4 bg-gray-900/50 p-4 rounded-xl border border-gray-800 backdrop-blur-md">
-                <h3 className="text-sm font-bold text-gray-400 mb-3 border-b border-gray-700 pb-2">策略构成 (Strategy Legs)</h3>
-                <div className="flex flex-wrap gap-4">
-                    {(() => {
-                        const strategy = params.strategy || 'single';
-                        const width = params.width || 10;
-                        const mainType = params.type;
-                        const K = Array.isArray(params.K) ? params.K[0] : params.K;
-
-                        // Helper for badge style
-                        const Badge = ({ type, strike, action }: { type: 'Call' | 'Put', strike: number, action: 'Long' | 'Short' }) => (
-                            <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border ${action === 'Long' ? 'bg-green-900/30 border-green-700/50' : 'bg-red-900/30 border-red-700/50'
-                                }`}>
-                                <span className={`text-xs font-bold ${action === 'Long' ? 'text-green-400' : 'text-red-400'}`}>
-                                    {action === 'Long' ? '买入' : '卖出'} ( {action} )
-                                </span>
-                                <span className="text-xs text-gray-300 font-mono">
-                                    {type} @ <span className="text-white font-bold">{strike.toFixed(2)}</span>
-                                </span>
-                            </div>
-                        );
-
-                        // Direction multiplier: Call=Long (+1), Put=Short (-1) global direction
-                        const dir = mainType === 'call' ? 1 : -1;
-                        const isLong = mainType === 'call';
-
-                        if (strategy === 'single') {
-                            return <Badge type={isLong ? 'Call' : 'Put'} strike={K} action={isLong ? 'Long' : 'Long'} />;
-                            // Wait, single leg depends on type. 'call' = Call, 'put' = Put. Usually 'Long' by default unless implied otherwise?
-                            // Standard calculator usually models 'Long Call' or 'Long Put'. 
-                            // If user wants Short, they interpret -Price?
-                            // Let's assume Standard is Long.
-                        }
-
-                        // Strategy Logic mirrors dataGenerator
-                        // If dir=1 (Call selected), we show standard LONG strategy.
-                        // If dir=-1 (Put selected), we show SHORT strategy (invert Long/Short badges).
-
-                        const longAction = isLong ? 'Long' : 'Short';
-                        const shortAction = isLong ? 'Short' : 'Long';
-
-                        if (strategy === 'straddle') {
-                            // Call K + Put K
-                            return (
-                                <>
-                                    <Badge type="Call" strike={K} action={longAction} />
-                                    <Badge type="Put" strike={K} action={longAction} />
-                                </>
-                            );
-                        }
-
-                        if (strategy === 'strangle') {
-                            // Put (K-W) + Call (K+W)
-                            return (
-                                <>
-                                    <Badge type="Put" strike={K - width} action={longAction} />
-                                    <Badge type="Call" strike={K + width} action={longAction} />
-                                </>
-                            );
-                        }
-
-                        if (strategy === 'butterfly') {
-                            // Call (K-W) + 2x Short Call K + Call (K+W)
-                            return (
-                                <>
-                                    <Badge type="Call" strike={K - width} action={longAction} />
-                                    <Badge type="Call" strike={K} action={shortAction} />
-                                    <div className="flex items-center text-xs text-gray-500 font-mono">x2</div>
-                                    <Badge type="Call" strike={K + width} action={longAction} />
-                                </>
-                            );
-                        }
-
-                        if (strategy === 'iron_condor') {
-                            // Put (K-2W) + Short Put (K-W) + Short Call (K+W) + Call (K+2W)
-                            return (
-                                <>
-                                    <Badge type="Put" strike={K - 2 * width} action={longAction} />
-                                    <Badge type="Put" strike={K - width} action={shortAction} />
-                                    <Badge type="Call" strike={K + width} action={shortAction} />
-                                    <Badge type="Call" strike={K + 2 * width} action={longAction} />
-                                </>
-                            );
-                        }
-
-                        return null;
-                    })()}
-                </div>
+            <div className="mt-4">
+                <StrategyLegs params={params} />
             </div>
         </div>
     );

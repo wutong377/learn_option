@@ -1,5 +1,16 @@
 export type OptionType = 'call' | 'put';
-export type StrategyType = 'single' | 'straddle' | 'strangle' | 'butterfly' | 'iron_condor';
+export type StrategyType = 'single' | 'straddle' | 'strangle' | 'butterfly' | 'iron_condor' | 'ratio_spread' | 'calendar_spread' | 'diagonal_spread' | 'time_butterfly' | 'custom';
+
+export interface LegDefinition {
+    type: 'call' | 'put';
+    quantity: number; // >0 Long, <0 Short
+    store_quantity?: number; // Store the quantity for custom strategy, to keep track of sign
+    k: number;
+    t: number; // Trading years
+    tDiscount?: number; // Calendar years
+    sigma: number;
+    r: number;
+}
 
 export interface OptionParams {
     S: number | number[];
@@ -11,8 +22,19 @@ export interface OptionParams {
     type: OptionType;
     // Strategy Params
     strategy?: StrategyType;
-    width?: number; // Spread width
+    width?: number; // Spread width (Primary)
+    width2?: number; // Spread width (Secondary, e.g. for asymmetric butterfly)
+    timeDiff?: number; // Time difference in days (for calendar/diagonal)
+    customLegs?: LegDefinition[]; // For Custom Strategy
 }
+
+// Re-defining OptionParams to be safe with replace_file_content context matching
+// Correction: I should target the specific lines to avoid redefining everything if possible, but adding an interface in the middle might be tricky if I don't replace the whole block.
+// Let's just modify StrategyType and OptionParams.
+
+// Actually, I'll allow replace_file_content to handle the replacement.
+// StrategyType line 2.
+// OptionParams line 4-17.
 
 export const DEFAULT_PARAMS: OptionParams = {
     S: 100,

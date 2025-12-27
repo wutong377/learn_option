@@ -4,6 +4,7 @@ import { SmartInput } from '../ui/SmartInput';
 import { Settings2, Calendar } from 'lucide-react';
 import { calculateDays, getToday } from '../../utils/dateUtils';
 import { addDays, format } from 'date-fns';
+import { CustomStrategyBuilder } from './CustomStrategyBuilder';
 
 interface ControlPanelProps {
     params: OptionParams;
@@ -123,16 +124,53 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                         <option value="strangle">宽跨式 (Strangle)</option>
                         <option value="butterfly">蝶式 (Butterfly)</option>
                         <option value="iron_condor">鹰式 (Iron Condor)</option>
+                        <option value="ratio_spread">比例价差 (Ratio Spread)</option>
+                        <option value="calendar_spread">日历价差 (Calendar Spread)</option>
+                        <option value="diagonal_spread">对角价差 (Diagonal Spread)</option>
+                        <option value="time_butterfly">时间蝶式 (Time Butterfly)</option>
+                        <option value="custom">自定义策略 (Custom)</option>
                     </select>
 
-                    {params.strategy !== 'single' && (
+                    {/* Custom Strategy Builder */}
+                    {params.strategy === 'custom' && (
+                        <CustomStrategyBuilder
+                            params={params}
+                            onChange={(legs) => handleChange('customLegs', legs as any)}
+                        />
+                    )}
+
+                    {/* Dynamic Inputs based on Strategy */}
+                    {['strangle', 'butterfly', 'iron_condor', 'ratio_spread', 'diagonal_spread', 'time_butterfly'].includes(params.strategy || '') && (
                         <SmartInput
-                            label="价差宽度 (Width)"
+                            label={params.strategy === 'butterfly' ? "左翼宽度 (Left Width)" : "价差宽度 (Price Width)"}
                             value={params.width || 10}
                             min={1}
                             max={50}
                             step={1}
                             onChange={(v) => handleChange('width', v)}
+                        />
+                    )}
+
+                    {params.strategy === 'butterfly' && (
+                        <SmartInput
+                            label="右翼宽度 (Right Width)"
+                            value={params.width2 || params.width || 10}
+                            min={1}
+                            max={50}
+                            step={1}
+                            onChange={(v) => handleChange('width2', v)}
+                        />
+                    )}
+
+                    {['calendar_spread', 'diagonal_spread', 'time_butterfly'].includes(params.strategy || '') && (
+                        <SmartInput
+                            label="日历间隔 (Time Diff Days)"
+                            value={params.timeDiff || 30}
+                            min={1}
+                            max={180}
+                            step={1}
+                            onChange={(v) => handleChange('timeDiff', v)}
+                            formatValue={(v) => `${v.toFixed(0)} d`}
                         />
                     )}
                 </div>
