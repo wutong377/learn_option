@@ -1,5 +1,5 @@
 export type OptionType = 'call' | 'put';
-export type StrategyType = 'single' | 'straddle' | 'strangle' | 'butterfly' | 'iron_condor' | 'ratio_spread' | 'calendar_spread' | 'diagonal_spread' | 'time_butterfly' | 'custom';
+export type StrategyType = 'single' | 'straddle' | 'strangle' | 'butterfly' | 'iron_condor' | 'ratio_spread' | 'calendar_spread' | 'diagonal_spread' | 'time_butterfly' | 'vertical_call_spread' | 'vertical_put_spread' | 'custom';
 
 export interface LegDefinition {
     type: 'call' | 'put';
@@ -26,6 +26,8 @@ export interface OptionParams {
     width2?: number; // Spread width (Secondary, e.g. for asymmetric butterfly)
     timeDiff?: number; // Time difference in days (for calendar/diagonal)
     customLegs?: LegDefinition[]; // For Custom Strategy
+    q?: number | number[]; // Dividend Yield
+    isTextbookMode?: boolean; // If true, t = Calendar Days / 365, and Theta matches textbook
 }
 
 // Re-defining OptionParams to be safe with replace_file_content context matching
@@ -45,4 +47,6 @@ export const DEFAULT_PARAMS: OptionParams = {
     type: 'call',
     strategy: 'single',
     width: 10,
+    q: 0,
+    isTextbookMode: true,
 };

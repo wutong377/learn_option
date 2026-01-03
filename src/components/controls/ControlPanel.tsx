@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { OptionParams, OptionType } from '../../types';
 import { SmartInput } from '../ui/SmartInput';
-import { Settings2, Calendar } from 'lucide-react';
+import { Settings2, Calendar, BookOpen } from 'lucide-react';
 import { calculateDays, getToday } from '../../utils/dateUtils';
 import { addDays, format } from 'date-fns';
 import { CustomStrategyBuilder } from './CustomStrategyBuilder';
@@ -44,7 +44,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
             const { calendarDays, tradingDays } = calculateDays(dateStr);
             onChange({
                 ...params,
-                t: tradingDays / 252,
+                t: params.isTextbookMode ? calendarDays / 365 : tradingDays / 252,
                 tDiscount: calendarDays / 365
             });
         }
@@ -58,7 +58,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
             v.forEach(d => {
                 const date = addDays(today, Math.round(d));
                 const { calendarDays, tradingDays } = calculateDays(format(date, 'yyyy-MM-dd'));
-                tVals.push(tradingDays / 252);
+                tVals.push(params.isTextbookMode ? calendarDays / 365 : tradingDays / 252);
                 tDiscVals.push(calendarDays / 365);
             });
             onChange({ ...params, t: tVals, tDiscount: tDiscVals });
@@ -71,7 +71,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
             const { calendarDays, tradingDays } = calculateDays(dateStr);
             onChange({
                 ...params,
-                t: tradingDays / 252,
+                t: params.isTextbookMode ? calendarDays / 365 : tradingDays / 252,
                 tDiscount: calendarDays / 365
             });
         }
@@ -110,6 +110,50 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                 <h2 className="text-lg font-bold text-white">模型参数</h2>
             </div>
 
+            <div className="mb-6 flex items-center justify-between bg-blue-900/20 p-3 rounded-lg border border-blue-500/30">
+                <div className="flex items-center gap-2">
+                    <BookOpen className="w-4 h-4 text-blue-400" />
+                    <span className="text-sm font-medium text-blue-100">教科书模式</span>
+                </div>
+                <label className="relative inline-flex items-center cursor-pointer">
+                    <input
+                        type="checkbox"
+                        checked={params.isTextbookMode || false}
+                        onChange={(e) => {
+                            // When toggling, we need to recalculate t
+                            const isTextbook = e.target.checked;
+                            const currentNatural = currentNaturalDays();
+                            const currentVal = Array.isArray(currentNatural) ? currentNatural[0] : currentNatural;
+
+                            // Recalculate t based on new mode
+                            // We can just trigger a natural days change, but simplified:
+                            // Just update the flag and recalculate based on *existing* Natural Days preference
+
+                            // Simplest way: update flag, and re-run date logic if needed? 
+                            // Or just update flag and let user re-adjust?
+                            // Better: Update flag AND recalculate t immediately to keep "Natural Days" constant but change "Vol Time"
+
+                            const today = getToday();
+                            // Use first value if array
+                            const days = currentVal;
+                            const date = addDays(today, Math.round(days));
+                            const { calendarDays, tradingDays } = calculateDays(format(date, 'yyyy-MM-dd'));
+
+                            const newT = isTextbook ? calendarDays / 365 : tradingDays / 252;
+
+                            onChange({
+                                ...params,
+                                isTextbookMode: isTextbook,
+                                t: newT
+                                // tDiscount stays calendar/365
+                            });
+                        }}
+                        className="sr-only peer"
+                    />
+                    <div className="w-9 h-5 bg-gray-600 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-500 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                </label>
+            </div>
+
             <div className="space-y-6">
 
                 <div className="space-y-4 border-b border-gray-700 pb-4 mb-4">
@@ -128,6 +172,8 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                         <option value="calendar_spread">日历价差 (Calendar Spread)</option>
                         <option value="diagonal_spread">对角价差 (Diagonal Spread)</option>
                         <option value="time_butterfly">时间蝶式 (Time Butterfly)</option>
+                        <option value="vertical_call_spread">垂直看涨价差 (Vertical Call Spread)</option>
+                        <option value="vertical_put_spread">垂直看跌价差 (Vertical Put Spread)</option>
                         <option value="custom">自定义策略 (Custom)</option>
                     </select>
 
@@ -140,7 +186,7 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                     )}
 
                     {/* Dynamic Inputs based on Strategy */}
-                    {['strangle', 'butterfly', 'iron_condor', 'ratio_spread', 'diagonal_spread', 'time_butterfly'].includes(params.strategy || '') && (
+                    {['strangle', 'butterfly', 'iron_condor', 'ratio_spread', 'diagonal_spread', 'time_butterfly', 'vertical_call_spread', 'vertical_put_spread'].includes(params.strategy || '') && (
                         <SmartInput
                             label={params.strategy === 'butterfly' ? "左翼宽度 (Left Width)" : "价差宽度 (Price Width)"}
                             value={params.width || 10}
@@ -258,6 +304,16 @@ export const ControlPanel: React.FC<ControlPanelProps> = ({ params, onChange }) 
                     max={20}
                     step={0.1}
                     onChange={(v) => handleChange('r', fromPercent(v))}
+                    formatValue={(v) => `${v.toFixed(1)}%`}
+                />
+
+                <SmartInput
+                    label="股息率 (q %)"
+                    value={toPercent(params.q || 0)}
+                    min={0}
+                    max={20}
+                    step={0.1}
+                    onChange={(v) => handleChange('q', fromPercent(v))}
                     formatValue={(v) => `${v.toFixed(1)}%`}
                 />
             </div>

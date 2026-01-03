@@ -53,7 +53,9 @@ function createStrategyCalculator(params: OptionParams): StrategyCalc {
                 t: leg.t,
                 tDiscount: leg.tDiscount,
                 sigma: leg.sigma,
-                r: leg.r
+                r: leg.r,
+                q: Array.isArray(params.q) ? params.q[0] : params.q,
+                isTextbookMode: params.isTextbookMode
             };
 
             const legGreeks = calcLeg(legParams, leg.type);
@@ -116,7 +118,7 @@ export function generateDataSeries(
     }
 
     let compareVar: keyof OptionParams | null = null;
-    const arrayCandidates: (keyof OptionParams)[] = ['S', 'K', 't', 'sigma', 'r'];
+    const arrayCandidates: (keyof OptionParams)[] = ['S', 'K', 't', 'sigma', 'r', 'q'];
 
     for (const key of arrayCandidates) {
         if (key !== axisVar && Array.isArray(params[key]) && (params[key] as number[]).length > 1) {
@@ -208,6 +210,8 @@ export function generateDataSeries(
                 label = `σ=${(v * 100).toFixed(0)}%`;
             } else if (compareVar === 'r') {
                 label = `r=${(v * 100).toFixed(1)}%`;
+            } else if (compareVar === 'q') {
+                label = `q=${(v * 100).toFixed(1)}%`;
             }
 
             runSimulation(p, label);

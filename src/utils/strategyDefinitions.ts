@@ -198,6 +198,18 @@ export function getStrategyLegs(params: OptionParams): LegDefinition[] {
         legs.push({ type: mainType, k: K2, t, tDiscount, sigma, r, quantity: -1 * baseQty });
         legs.push({ type: mainType, k: K2, t: tFar, tDiscount: tDiscFar, sigma, r, quantity: 1 * baseQty });
     }
+    else if (s === 'vertical_call_spread') {
+        // Long (Bull) Call Spread: +1 Call K, -1 Call K+W
+        // Short (Bear) Call Spread: -1 Call K, +1 Call K+W
+        legs.push({ type: 'call', k: K, t, tDiscount, sigma, r, quantity: 1 * baseQty });
+        legs.push({ type: 'call', k: K + width, t, tDiscount, sigma, r, quantity: -1 * baseQty });
+    }
+    else if (s === 'vertical_put_spread') {
+        // Long (Bear) Put Spread: +1 Put K, -1 Put K-W
+        // Short (Bull) Put Spread: -1 Put K, +1 Put K-W
+        legs.push({ type: 'put', k: K, t, tDiscount, sigma, r, quantity: 1 * baseQty });
+        legs.push({ type: 'put', k: K - width, t, tDiscount, sigma, r, quantity: -1 * baseQty });
+    }
 
     return legs;
 }

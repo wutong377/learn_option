@@ -11,6 +11,7 @@ export interface SimulationParams {
     sigma: number; // Volatility (decimal)
     r: number; // Risk-free Rate (decimal)
     q?: number; // Dividend Yield
+    isTextbookMode?: boolean; // Use simple calendar days for all time
 }
 
 export interface GreeksResult {
@@ -55,7 +56,7 @@ function n(x: number): number {
 
 export class BlackScholes {
     static calculate(params: SimulationParams, type: 'call' | 'put'): GreeksResult {
-        const { S, K, t, sigma, r, q = 0, tDiscount } = params;
+        const { S, K, t, sigma, r, q = 0, tDiscount, isTextbookMode = false } = params;
 
         // t  -> t_vol (Trading Time)
         // tRate -> t_cal (Calendar Time)
@@ -134,7 +135,10 @@ export class BlackScholes {
             // User just wants "Theta".
             // Let's scale term1 by (safeT / safeTRate) if possible? No, safeT varies differently.
             // Let's assume a conversion factor of approx 0.69 (252/365) applies to the volatility consumption.
-            const volTimeWeight = 252 / 365;
+            // Vol time weight for Theta:
+            // Textbook Mode: 1.0 (Theta per year, using same t)
+            // Real World: 252/365 (Vol decays on trading days, but we report per calendar day)
+            const volTimeWeight = isTextbookMode ? 1.0 : (252 / 365);
             theta = term1 * volTimeWeight + term2 + term3;
 
             // Rho (wrt r, using t_cal)
@@ -148,7 +152,7 @@ export class BlackScholes {
             const term2 = r * K * e_rt * nd2_minus;
             const term3 = - q * S * e_qt * nd1_minus;
 
-            const volTimeWeight = 252 / 365;
+            const volTimeWeight = isTextbookMode ? 1.0 : (252 / 365);
             theta = term1 * volTimeWeight + term2 + term3;
 
             rho = -K * safeTRate * e_rt * nd2_minus;
