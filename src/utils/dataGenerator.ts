@@ -102,8 +102,9 @@ export function generateDataSeries(
         maxVal = baseParams.K * 1.5;
         if (minVal === maxVal) { minVal = 50; maxVal = 150; }
     } else if (axisVar === 't') {
-        minVal = 0.01;
-        maxVal = Math.max(baseParams.t * 2, 1.0);
+        // 使用自然天数范围 [0, 365]，对应年化 [0, 1]
+        minVal = 0.0001; // 接近 0，避免除零问题
+        maxVal = 1.0; // 365 自然天 = 1 年
     } else if (axisVar === 'sigma') {
         minVal = 0.05;
         maxVal = 1.0;

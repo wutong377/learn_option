@@ -76,7 +76,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
         // Convert Display Unit to Raw Unit for Interpolation
         let markerVal = parseFloat(markerInput);
         if (xAxisVar === 't') {
-            markerVal = markerVal / 252;
+            markerVal = markerVal / 365; // 自然天数转换为年
         } else if (xAxisVar === 'sigma' || xAxisVar === 'r') {
             markerVal = markerVal / 100;
         }
@@ -191,7 +191,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                 max: 'dataMax',
                 inverse: xAxisVar === 't',
                 axisLine: { lineStyle: { color: '#4b5563' } },
-                axisLabel: { color: '#9ca3af', showMaxLabel: true, showMinLabel: true },
+                axisLabel: { color: '#9ca3af', showMaxLabel: true, showMinLabel: true, formatter: (v: number) => v.toFixed(2) },
                 splitLine: { show: false }
             },
             yAxis: {
@@ -203,7 +203,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
             series: currentSeriesList.map((s: any, index: number) => {
                 // Scale X-axis for display and markers
                 const scaledX = xAxis.map(v => {
-                    if (xAxisVar === 't') return v * 252;
+                    if (xAxisVar === 't') return v * 365; // 年转换为自然天数显示
                     if (xAxisVar === 'sigma') return v * 100;
                     if (xAxisVar === 'r') return v * 100;
                     return v;
@@ -232,7 +232,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
 
     const getAxisLabel = (v: AxisVariable) => {
         if (v === 'S') return '价格 (S)';
-        if (v === 't') return '时间 (Trading Days)';
+        if (v === 't') return '剩余自然天数';
         if (v === 'sigma') return '波动率 (%)';
         if (v === 'r') return '利率 (%)';
         return v;
@@ -288,7 +288,7 @@ export const GreeksDashboard: React.FC<GreeksDashboardProps> = ({ params }) => {
                             <div className="flex items-center gap-2">
                                 <div className="flex bg-gray-800 rounded-lg p-1">
                                     <button onClick={() => setXAxisVar('S')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'S' ? 'bg-teal-600 text-white' : 'text-gray-400'}`}>S</button>
-                                    <button onClick={() => setXAxisVar('t')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 't' ? 'bg-orange-600 text-white' : 'text-gray-400'}`}>t (Trading)</button>
+                                    <button onClick={() => setXAxisVar('t')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 't' ? 'bg-orange-600 text-white' : 'text-gray-400'}`}>t (Calendar)</button>
                                     <button onClick={() => setXAxisVar('sigma')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'sigma' ? 'bg-pink-600 text-white' : 'text-gray-400'}`}>σ</button>
                                     <button onClick={() => setXAxisVar('r')} className={`px-3 py-1.5 text-xs font-bold rounded-md ${xAxisVar === 'r' ? 'bg-red-600 text-white' : 'text-gray-400'}`}>r</button>
                                 </div>
